@@ -1,0 +1,128 @@
+---
+title: "Machine Learning Coursera Project"
+date: "December 21, 2017"
+---
+
+## Synopsis
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The goal of this project is to predict the manner of performing unilateral dumbbell biceps curls based on data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The 5 possible methods include -
+
+* A: exactly according to the specification 
+
+* B: throwing the elbows to the front
+
+* C: lifting the dumbbell only halfway 
+
+* D: lowering the dumbbell only halfway
+
+* E: throwing the hips to the front
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Sourcing
+
+The training data for this project:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data for this project: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data originates from:
+http://groupware.les.inf.puc-rio.br/har
+We thank them for their generousity in allowing our use of the data. 
+
+
+```{r}
+library(Hmisc)
+library(caret)
+library(randomForest)
+library(foreach)
+library(doParallel)
+set.seed(8088)
+options(warn=-1)
+```
+
+Loaded Data and Removed uneeded values.
+
+```{r}
+data_training <- read.csv("pml-training.csv", na.strings=c("#DIV/0!") )
+data_evaluation <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!") )
+```
+
+Transformed columns as numeric.
+```{r}
+for(i in c(8:ncol(data_training)-1)) {data_training[,i] = as.numeric(as.character(data_training[,i]))}
+
+for(i in c(8:ncol(data_evaluation)-1)) {data_evaluation[,i] = as.numeric(as.character(data_evaluation[,i]))}
+```
+
+Removed incomplete columns.  
+
+Created feature set.
+
+```{r}
+feature <- colnames(data_training[colSums(is.na(data_training)) == 0])[-(1:7)]
+model_data <- data_training[feature]
+feature
+```
+
+Data model from the feature set.
+
+```{r}
+mod <- createDataPartition(y=model_data$classe, p=0.75, list=FALSE )
+training <- model_data[mod,]
+testing <- model_data[-mod,]
+```
+
+Creation of random forests with 200 trees each. 
+
+```{r}
+registerDoParallel()
+x <- training[-ncol(training)]
+y <- training$classe
+
+rf <- foreach(ntree=rep(200, 6), .combine=randomForest::combine, .packages='randomForest') %dopar% {
+randomForest(x, y, ntree=ntree) 
+}
+```
+
+Error Report
+```{r}
+predictions1 <- predict(rf, newdata=training)
+confusionMatrix(predictions1,training$classe)
+
+
+predictions2 <- predict(rf, newdata=testing)
+confusionMatrix(predictions2,testing$classe)
+```
+
+Conclusion
+--------------------------------
+
+The model proves accurate.  
+
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+
+x <- data_evaluation
+x <- x[feature[feature!='classe']]
+answers <- predict(rf, newdata=x)
+
+answers
+
+pml_write_files(answers)
+```
